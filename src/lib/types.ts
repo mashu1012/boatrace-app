@@ -1,0 +1,48 @@
+export type RaceSummary = {
+  id: string; // `${date}-${jcd}-${rno}`
+  date: string; // YYYYMMDD
+  jcd: string;
+  venueName: string;
+  rno: number;
+  raceTitle: string | null;
+  deadline: string | null; // HH:MM
+  hasCard: boolean; // 出走表が取得済みか
+  hasExhibition: boolean; // 展示データが取得済みか
+};
+
+export type Entry = {
+  lane: number; // 1-6 号艇(枠番)
+  racerNumber: string | null;
+  racerName: string;
+  racerClass: string | null; // A1/A2/B1/B2
+  motorNumber: number | null;
+  boatNumber: number | null;
+  motorWin2Rate: number | null; // モーター2連対率
+  nationalWin3Rate: number | null; // 全国3連対率
+  nationalWin2Rate: number | null; // 全国2連対率
+  localWin3Rate: number | null; // 当地3連対率
+  localWin2Rate: number | null; // 当地2連対率
+};
+
+export type ExhibitionEntry = {
+  lane: number; // 号艇(艇番)
+  exhibitionTime: number | null; // 展示タイム(秒)
+  tilt: number | null;
+  startCourse: number | null; // 進入コース予想(1-6)
+  startTiming: number | null; // スタートタイミング(秒, 負値はフライング目安)
+};
+
+export type RaceDetail = {
+  summary: RaceSummary;
+  entries: Entry[];
+  exhibitions: ExhibitionEntry[];
+  prediction: DevelopmentPrediction | null;
+};
+
+export type DevelopmentPrediction = {
+  // 進入コース順(1マーク進入予想の左から並び, 値は艇番)
+  courseOrder: number[];
+  // 1マーク通過後の予想順位(艇番の配列, 先頭が1着予想)
+  markOrder: number[];
+  note: string;
+};

@@ -50,10 +50,17 @@ export type RaceDetail = {
   prediction: DevelopmentPrediction | null;
 };
 
+export type MarkLineEntry = {
+  lane: number;
+  gapSeconds: number; // 先頭艇が1マークに到達した瞬間の推定タイム差(先頭艇は0)
+};
+
 export type DevelopmentPrediction = {
   // 進入コース順(1マーク進入予想の左から並び, 値は艇番)
   courseOrder: number[];
   // 1マーク通過後の予想順位(艇番の配列, 先頭が1着予想)
   markOrder: number[];
+  // 先頭艇が1マークに到達した瞬間の各艇のライン(markOrder順、先頭艇との推定差付き)
+  markLine: MarkLineEntry[];
   note: string;
 };

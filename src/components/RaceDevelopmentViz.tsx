@@ -2,6 +2,8 @@ import { laneColor } from "@/lib/laneColors";
 import type { DevelopmentPrediction, ExhibitionEntry } from "@/lib/types";
 
 const WIDTH = 600;
+const LINE_PANEL_HEIGHT = 220;
+const laneY = (lane: number) => 24 + (lane - 1) * ((LINE_PANEL_HEIGHT - 48) / 5);
 
 function Boat({
   x,
@@ -32,8 +34,7 @@ function Boat({
 }
 
 function StartLinePanel({ exhibitions }: { exhibitions: ExhibitionEntry[] }) {
-  const height = 220;
-  const laneY = (lane: number) => 24 + (lane - 1) * ((height - 48) / 5);
+  const height = LINE_PANEL_HEIGHT;
   const lineX = 520;
 
   const timingX = (timing: number | null) => {
@@ -122,54 +123,69 @@ function CourseEntryPanel({ exhibitions }: { exhibitions: ExhibitionEntry[] }) {
   );
 }
 
-function MarkDevelopmentPanel({
-  prediction,
-  exhibitions,
-}: {
-  prediction: DevelopmentPrediction;
-  exhibitions: ExhibitionEntry[];
-}) {
-  const height = 260;
-  const cx = 470;
-  const cy = 210;
-  const rOuter = 190;
+/**
+ * 「先頭艇が1マークに到達した瞬間」の各艇の位置関係を、①スタートのライン予想と
+ * 同じレイアウト(艇番ごとの固定の行 + 基準線からの距離)で表示する。
+ * 基準線(右端)= 先頭艇が1マークに到達した瞬間。左に離れているほど遅れている。
+ */
+function MarkLinePanel({ prediction }: { prediction: DevelopmentPrediction }) {
+  const height = LINE_PANEL_HEIGHT;
+  const lineX = 520;
+  const GAP_SCALE = 70; // gapSeconds 1あたりのピクセル距離
 
-  // 予想順位を、内側(1着想定)から外側へ向かうターンマーク周りの弧に沿って配置する
-  const points = prediction.markOrder.map((lane, idx) => {
-    const angle = Math.PI * (0.98 - idx * 0.09); // 上→左へ回り込む弧
-    const radius = rOuter - idx * 16;
-    const x = cx + radius * Math.cos(angle);
-    const y = cy - radius * Math.sin(angle) * 0.62;
-    return { lane, x, y };
-  });
+  const gapX = (gap: number) => {
+    const x = lineX - gap * GAP_SCALE;
+    return Math.min(570, Math.max(110, x));
+  };
+
+  const rankByLane = new Map(prediction.markOrder.map((lane, idx) => [lane, idx + 1]));
 
   return (
     <svg viewBox={`0 0 ${WIDTH} ${height}`} className="w-full">
-      <path
-        d={`M 40 ${cy} L ${cx - rOuter} ${cy} A ${rOuter} ${rOuter * 0.62} 0 0 1 ${cx} ${cy - rOuter * 0.62}`}
-        fill="none"
-        stroke="#bfdbfe"
-        strokeWidth={26}
-        strokeLinecap="round"
-      />
-      <circle cx={cx - rOuter} cy={cy} r={5} fill="#f59e0b" />
-      <text x={cx - rOuter - 10} y={cy + 22} fontSize={11} fill="#9ca3af" textAnchor="middle">
-        1マーク
+      <text x={16} y={16} fontSize={12} fill="#6b7280">
+        遅れ大 ←
       </text>
-      {points.map((p, idx) => {
-        const exTime = exhibitions.find((e) => e.lane === p.lane)?.exhibitionTime ?? null;
-        return (
-          <g key={p.lane}>
-            <Boat lane={p.lane} x={p.x} y={p.y} r={13} />
-            <text x={p.x} y={p.y - 20} fontSize={11} fill="#6b7280" textAnchor="middle">
-              {idx + 1}
-            </text>
-            <text x={p.x} y={p.y + 26} fontSize={9} fill="#9ca3af" textAnchor="middle">
-              展示 {exTime === null ? "-" : exTime.toFixed(2)}
-            </text>
-          </g>
-        );
-      })}
+      <text x={lineX - 95} y={16} fontSize={11} fill="#6b7280">
+        1マーク到達(先頭艇)
+      </text>
+      <line x1={lineX} y1={20} x2={lineX} y2={height - 10} stroke="#f59e0b" strokeDasharray="4 4" strokeWidth={2} />
+      {[1, 2, 3, 4, 5, 6].map((lane) => (
+        <line
+          key={lane}
+          x1={40}
+          y1={laneY(lane)}
+          x2={570}
+          y2={laneY(lane)}
+          stroke="#e5e7eb"
+          strokeWidth={1}
+        />
+      ))}
+      {prediction.markLine.map((m) => (
+        <Boat key={m.lane} lane={m.lane} x={gapX(m.gapSeconds)} y={laneY(m.lane)} />
+      ))}
+      {prediction.markLine.map((m) => (
+        <text
+          key={`rank-${m.lane}`}
+          x={gapX(m.gapSeconds)}
+          y={laneY(m.lane) - 20}
+          fontSize={10}
+          fill="#6b7280"
+          textAnchor="middle"
+        >
+          {rankByLane.get(m.lane)}位
+        </text>
+      ))}
+      {prediction.markLine.map((m) => (
+        <text
+          key={`gap-${m.lane}`}
+          x={gapX(m.gapSeconds) - 26}
+          y={laneY(m.lane) + 4}
+          fontSize={10}
+          fill="#9ca3af"
+        >
+          {m.gapSeconds === 0 ? "先頭" : `+${m.gapSeconds.toFixed(2)}`}
+        </text>
+      ))}
     </svg>
   );
 }
@@ -210,7 +226,7 @@ export default function RaceDevelopmentViz({
           <h3 className="mb-2 text-sm font-semibold text-gray-700">
             ③ 1マークのライン予想(展示タイム反映)
           </h3>
-          <MarkDevelopmentPanel prediction={prediction} exhibitions={exhibitions} />
+          <MarkLinePanel prediction={prediction} />
         </div>
       </section>
       <p className="text-xs text-gray-400">{prediction.note}</p>

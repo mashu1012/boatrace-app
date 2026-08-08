@@ -59,6 +59,18 @@ function createDb(): Database.Database {
       FOREIGN KEY (race_id) REFERENCES races(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS venue_days (
+      date TEXT NOT NULL,
+      jcd TEXT NOT NULL,
+      venue_name TEXT NOT NULL,
+      active INTEGER NOT NULL DEFAULT 0,
+      event_day_label TEXT,
+      period_badge TEXT,
+      grade_badge TEXT,
+      fetched_at TEXT,
+      PRIMARY KEY (date, jcd)
+    );
+
     -- 展示データの取得ロック: 1レースにつき1回だけ取得したことをDB上で保証するための行。
     -- races.fetched_exhibition_at の更新と同一トランザクションで INSERT することで
     -- 複数プロセス/同時アクセスからの二重取得を防ぐ。

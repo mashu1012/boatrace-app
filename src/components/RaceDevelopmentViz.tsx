@@ -122,7 +122,13 @@ function CourseEntryPanel({ exhibitions }: { exhibitions: ExhibitionEntry[] }) {
   );
 }
 
-function MarkDevelopmentPanel({ prediction }: { prediction: DevelopmentPrediction }) {
+function MarkDevelopmentPanel({
+  prediction,
+  exhibitions,
+}: {
+  prediction: DevelopmentPrediction;
+  exhibitions: ExhibitionEntry[];
+}) {
   const height = 260;
   const cx = 470;
   const cy = 210;
@@ -150,14 +156,20 @@ function MarkDevelopmentPanel({ prediction }: { prediction: DevelopmentPredictio
       <text x={cx - rOuter - 10} y={cy + 22} fontSize={11} fill="#9ca3af" textAnchor="middle">
         1マーク
       </text>
-      {points.map((p, idx) => (
-        <g key={p.lane}>
-          <Boat lane={p.lane} x={p.x} y={p.y} r={13} />
-          <text x={p.x} y={p.y - 20} fontSize={11} fill="#6b7280" textAnchor="middle">
-            {idx + 1}
-          </text>
-        </g>
-      ))}
+      {points.map((p, idx) => {
+        const exTime = exhibitions.find((e) => e.lane === p.lane)?.exhibitionTime ?? null;
+        return (
+          <g key={p.lane}>
+            <Boat lane={p.lane} x={p.x} y={p.y} r={13} />
+            <text x={p.x} y={p.y - 20} fontSize={11} fill="#6b7280" textAnchor="middle">
+              {idx + 1}
+            </text>
+            <text x={p.x} y={p.y + 26} fontSize={9} fill="#9ca3af" textAnchor="middle">
+              展示 {exTime === null ? "-" : exTime.toFixed(2)}
+            </text>
+          </g>
+        );
+      })}
     </svg>
   );
 }
@@ -192,8 +204,10 @@ export default function RaceDevelopmentViz({
         <CourseEntryPanel exhibitions={exhibitions} />
       </section>
       <section>
-        <h3 className="mb-2 text-sm font-semibold text-gray-700">③ 1マーク通過後の展開予想</h3>
-        <MarkDevelopmentPanel prediction={prediction} />
+        <h3 className="mb-2 text-sm font-semibold text-gray-700">
+          ③ 1マーク通過後の展開予想(展示タイム反映)
+        </h3>
+        <MarkDevelopmentPanel prediction={prediction} exhibitions={exhibitions} />
       </section>
       <p className="text-xs text-gray-400">{prediction.note}</p>
     </div>

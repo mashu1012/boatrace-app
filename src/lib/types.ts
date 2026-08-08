@@ -1,3 +1,14 @@
+export type PeriodBadge = "モーニング" | "デイ" | "サマータイム" | "ナイター" | "ミッドナイト";
+
+export type VenueDayStatus = {
+  jcd: string;
+  venueName: string;
+  active: boolean;
+  eventDayLabel: string | null; // 初日/2日目/.../最終日
+  periodBadge: PeriodBadge | null;
+  gradeBadge: string | null; // G1/G2/G3/SG
+};
+
 export type RaceSummary = {
   id: string; // `${date}-${jcd}-${rno}`
   date: string; // YYYYMMDD

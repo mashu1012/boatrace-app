@@ -52,8 +52,47 @@ db.exec(`
     race_id TEXT PRIMARY KEY,
     locked_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
+  CREATE TABLE IF NOT EXISTS venue_days (
+    date TEXT NOT NULL,
+    jcd TEXT NOT NULL,
+    venue_name TEXT NOT NULL,
+    active INTEGER NOT NULL DEFAULT 0,
+    event_day_label TEXT,
+    period_badge TEXT,
+    grade_badge TEXT,
+    fetched_at TEXT,
+    PRIMARY KEY (date, jcd)
+  );
 `);
 
+const ALL_VENUES = [
+  { jcd: "01", name: "桐生" },
+  { jcd: "02", name: "戸田" },
+  { jcd: "03", name: "江戸川" },
+  { jcd: "04", name: "平和島" },
+  { jcd: "05", name: "多摩川" },
+  { jcd: "06", name: "浜名湖" },
+  { jcd: "07", name: "蒲郡" },
+  { jcd: "08", name: "常滑" },
+  { jcd: "09", name: "津" },
+  { jcd: "10", name: "三国" },
+  { jcd: "11", name: "びわこ" },
+  { jcd: "12", name: "住之江" },
+  { jcd: "13", name: "尼崎" },
+  { jcd: "14", name: "鳴門" },
+  { jcd: "15", name: "丸亀" },
+  { jcd: "16", name: "児島" },
+  { jcd: "17", name: "宮島" },
+  { jcd: "18", name: "徳山" },
+  { jcd: "19", name: "下関" },
+  { jcd: "20", name: "若松" },
+  { jcd: "21", name: "芦屋" },
+  { jcd: "22", name: "福岡" },
+  { jcd: "23", name: "唐津" },
+  { jcd: "24", name: "大村" },
+];
+
+// レースカードまで投入する場(展示データ・出走表デモ用)
 const VENUES = [
   { jcd: "12", name: "住之江" },
   { jcd: "05", name: "多摩川" },
@@ -96,6 +135,35 @@ const upsertExhibition = db.prepare(`
 const markFetched = db.prepare(
   "UPDATE races SET fetched_exhibition_at = datetime('now') WHERE id = ?"
 );
+const upsertVenueDay = db.prepare(`
+  INSERT INTO venue_days (date, jcd, venue_name, active, event_day_label, period_badge, grade_badge, fetched_at)
+  VALUES (@date, @jcd, @venueName, @active, @eventDayLabel, @periodBadge, @gradeBadge, datetime('now'))
+  ON CONFLICT(date, jcd) DO UPDATE SET active=excluded.active, event_day_label=excluded.event_day_label,
+    period_badge=excluded.period_badge, grade_badge=excluded.grade_badge, fetched_at=excluded.fetched_at
+`);
+
+const ACTIVE_JCDS = new Set(VENUES.map((v) => v.jcd));
+const DEMO_META = {
+  "12": { eventDayLabel: "5日目", periodBadge: "ナイター", gradeBadge: null },
+  "05": { eventDayLabel: "初日", periodBadge: "サマータイム", gradeBadge: null },
+  "17": { eventDayLabel: "最終日", periodBadge: "デイ", gradeBadge: "G1" },
+};
+
+for (const venue of ALL_VENUES) {
+  // レースデータを投入していない場をactive扱いにすると /venue/[jcd] が404になるため、
+  // 実際にレースを投入するVENUESのみactiveにする
+  const active = ACTIVE_JCDS.has(venue.jcd);
+  const meta = DEMO_META[venue.jcd] ?? {};
+  upsertVenueDay.run({
+    date: today,
+    jcd: venue.jcd,
+    venueName: venue.name,
+    active: active ? 1 : 0,
+    eventDayLabel: active ? (meta.eventDayLabel ?? "初日") : null,
+    periodBadge: active ? (meta.periodBadge ?? "デイ") : null,
+    gradeBadge: active ? (meta.gradeBadge ?? null) : null,
+  });
+}
 
 let raceCount = 0;
 for (const venue of VENUES) {

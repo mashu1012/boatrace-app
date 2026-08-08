@@ -1,18 +1,47 @@
 import { getDb } from "@/lib/db";
 import { venueName } from "@/lib/venues";
 import { fetchOfficialPage } from "./client";
-import { parseRaceIndex, parseRaceCard, parseBeforeInfo, parseActiveVenues } from "./parse";
+import { parseRaceIndex, parseRaceCard, parseBeforeInfo, parseVenueDays } from "./parse";
 
 function raceId(date: string, jcd: string, rno: number): string {
   return `${date}-${jcd}-${rno}`;
 }
 
 /**
- * 当日開催されている場の一覧を取得する(トップページ相当)。
+ * トップページ(全24場の開催状況)を1回だけ取得し、venue_daysに保存する。
+ * 戻り値は当日開催中の場コード一覧。
  */
-export async function fetchActiveVenues(date: string): Promise<string[]> {
+export async function ingestVenueDays(date: string): Promise<string[]> {
+  const db = getDb();
   const html = await fetchOfficialPage(`/owpc/pc/race/index?hd=${date}`);
-  return parseActiveVenues(html);
+  const statuses = parseVenueDays(html);
+
+  const upsert = db.prepare(`
+    INSERT INTO venue_days (date, jcd, venue_name, active, event_day_label, period_badge, grade_badge, fetched_at)
+    VALUES (@date, @jcd, @venueName, @active, @eventDayLabel, @periodBadge, @gradeBadge, datetime('now'))
+    ON CONFLICT(date, jcd) DO UPDATE SET
+      active = excluded.active,
+      event_day_label = excluded.event_day_label,
+      period_badge = excluded.period_badge,
+      grade_badge = excluded.grade_badge,
+      fetched_at = excluded.fetched_at
+  `);
+  const tx = db.transaction(() => {
+    for (const s of statuses) {
+      upsert.run({
+        date,
+        jcd: s.jcd,
+        venueName: s.venueName,
+        active: s.active ? 1 : 0,
+        eventDayLabel: s.eventDayLabel,
+        periodBadge: s.periodBadge,
+        gradeBadge: s.gradeBadge,
+      });
+    }
+  });
+  tx();
+
+  return statuses.filter((s) => s.active).map((s) => s.jcd);
 }
 
 /**
@@ -20,9 +49,9 @@ export async function fetchActiveVenues(date: string): Promise<string[]> {
  * (スケジューラから朝に一度だけ呼び出す想定)
  */
 export async function ingestDailySchedule(date: string): Promise<{ venue: string; races: number }[]> {
-  const venues = await fetchActiveVenues(date);
+  const activeJcds = await ingestVenueDays(date);
   const results: { venue: string; races: number }[] = [];
-  for (const jcd of venues) {
+  for (const jcd of activeJcds) {
     const races = await ingestRaceCardsForVenueDay(date, jcd);
     results.push({ venue: jcd, races });
   }

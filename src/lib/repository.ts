@@ -1,6 +1,7 @@
 import { getDb } from "@/lib/db";
 import { buildDevelopmentPrediction } from "@/lib/prediction";
-import type { Entry, ExhibitionEntry, RaceDetail, RaceSummary } from "@/lib/types";
+import { VENUES } from "@/lib/venues";
+import type { Entry, ExhibitionEntry, PeriodBadge, RaceDetail, RaceSummary, VenueDayStatus } from "@/lib/types";
 
 type RaceRow = {
   id: string;
@@ -95,6 +96,41 @@ export function getRaceDetail(raceId: string): RaceDetail | null {
     exhibitions,
     prediction: exhibitions.length > 0 ? buildDevelopmentPrediction(exhibitions) : null,
   };
+}
+
+export function listVenueDaysByDate(date: string): VenueDayStatus[] {
+  const db = getDb();
+  const rows = db.prepare("SELECT * FROM venue_days WHERE date = ?").all(date) as Array<{
+    jcd: string;
+    venue_name: string;
+    active: number;
+    event_day_label: string | null;
+    period_badge: string | null;
+    grade_badge: string | null;
+  }>;
+  const byJcd = new Map(rows.map((r) => [r.jcd, r]));
+
+  return VENUES.map((v) => {
+    const row = byJcd.get(v.jcd);
+    if (!row) {
+      return {
+        jcd: v.jcd,
+        venueName: v.name,
+        active: false,
+        eventDayLabel: null,
+        periodBadge: null,
+        gradeBadge: null,
+      };
+    }
+    return {
+      jcd: row.jcd,
+      venueName: row.venue_name,
+      active: Boolean(row.active),
+      eventDayLabel: row.event_day_label,
+      periodBadge: row.period_badge as PeriodBadge | null,
+      gradeBadge: row.grade_badge,
+    };
+  });
 }
 
 export function listActiveDates(): string[] {

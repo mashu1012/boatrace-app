@@ -1,5 +1,6 @@
 import * as cheerio from "cheerio";
-import type { Entry, ExhibitionEntry } from "@/lib/types";
+import type { Entry, ExhibitionEntry, PeriodBadge, VenueDayStatus } from "@/lib/types";
+import { VENUES } from "@/lib/venues";
 
 /**
  * 注意: このパーサーは公式サイトの一般的なテーブル構造(セル順序ベース)を前提に
@@ -31,16 +32,79 @@ export type RaceListItem = {
   deadline: string | null;
 };
 
-/** 当日の開催場一覧ページから、開催中の場コード(jcd)を抽出する */
-export function parseActiveVenues(html: string): string[] {
+const PERIOD_BADGES: PeriodBadge[] = ["モーニング", "デイ", "サマータイム", "ナイター", "ミッドナイト"];
+
+function ownText($el: cheerio.Cheerio<AnyNode>): string {
+  return $el
+    .contents()
+    .filter((_, n) => (n as { type?: string }).type === "text")
+    .text()
+    .trim();
+}
+
+/**
+ * トップページ(当日の開催場一覧)から全24場の開催状況を抽出する。
+ * 各場カードの正確なマークアップは未検証のため、「場名テキストを起点に祖先を遡り、
+ * 開催日数パターンを含む要素をカードとみなす」というテキストベースの手法を採る。
+ */
+export function parseVenueDays(html: string): VenueDayStatus[] {
   const $ = cheerio.load(html);
-  const jcds = new Set<string>();
-  $('a[href*="jcd="]').each((_, a) => {
-    const href = $(a as AnyNode).attr("href") ?? "";
-    const match = href.match(/jcd=(\d{2})/);
-    if (match) jcds.add(match[1]);
-  });
-  return Array.from(jcds).sort();
+  const results: VenueDayStatus[] = [];
+
+  for (const venue of VENUES) {
+    let resolved = false;
+
+    $("*").each((_, el) => {
+      if (resolved) return;
+      const $el = $(el as AnyNode);
+      if (ownText($el) !== venue.name) return;
+
+      let container = $el;
+      for (let i = 0; i < 5; i++) {
+        const text = textOf(container);
+        if (text.length > 0 && text.length < 120 && /(初日|最終日|\d+日目)/.test(text)) break;
+        const parent = container.parent();
+        if (parent.length === 0) break;
+        container = parent;
+      }
+
+      const containerText = textOf(container);
+      const dayMatch = containerText.match(/(初日|最終日|\d+日目)/);
+      const gradeMatch = containerText.match(/\b(SG|G1|G2|G3)\b/);
+
+      let periodBadge: PeriodBadge | null = null;
+      container.find("img[alt], [title]").each((__, badgeEl) => {
+        const $badge = $(badgeEl as AnyNode);
+        const label = $badge.attr("alt") ?? $badge.attr("title") ?? "";
+        if ((PERIOD_BADGES as string[]).includes(label)) {
+          periodBadge = label as PeriodBadge;
+        }
+      });
+
+      results.push({
+        jcd: venue.jcd,
+        venueName: venue.name,
+        active: Boolean(dayMatch),
+        eventDayLabel: dayMatch ? dayMatch[1] : null,
+        periodBadge,
+        gradeBadge: gradeMatch ? gradeMatch[1] : null,
+      });
+      resolved = true;
+    });
+
+    if (!resolved) {
+      results.push({
+        jcd: venue.jcd,
+        venueName: venue.name,
+        active: false,
+        eventDayLabel: null,
+        periodBadge: null,
+        gradeBadge: null,
+      });
+    }
+  }
+
+  return results;
 }
 
 /** 番組表(場・日単位の一覧)ページから当日のレース一覧を抽出する */

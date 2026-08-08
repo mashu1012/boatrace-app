@@ -43,6 +43,35 @@ export type ExhibitionEntry = {
   startTiming: number | null; // スタートタイミング(秒, 負値はフライング目安)
 };
 
+export type RacerCourseProfile = {
+  entryCount: number | null;
+  placeRate: number | null;
+  avgStartTiming: number | null;
+  avgStartRank: number | null;
+};
+
+/**
+ * レーサー期別成績マスタ(racersテーブル)由来のプロフィール。
+ * 「複勝率」が2連対率・3連対率のいずれを指すか実データで未検証のため、現状は
+ * entries(出走表)の national_win3_rate 等へは自動反映していない
+ * (README「過去データ(データベース基盤)について」参照)。
+ */
+export type RacerProfile = {
+  racerNumber: string;
+  nameKanji: string;
+  nameKana: string;
+  branch: string;
+  racerClass: string;
+  winRate: number | null;
+  placeRate: number | null;
+  raceCount: number | null;
+  avgStartTiming: number | null;
+  /** index 0 = 1コース 〜 index 5 = 6コース */
+  courses: RacerCourseProfile[];
+  termYear: string | null;
+  termNo: string | null;
+};
+
 export type RaceDetail = {
   summary: RaceSummary;
   entries: Entry[];

@@ -31,6 +31,25 @@ npm run dev
 
 3場×12レース分のダミーデータが投入される(うち住之江1R・2Rのみ展示データ投入済みとして表示)。
 
+### 実ネットワークアクセスのある環境での検証(Docker)
+
+このリポジトリの開発環境はネットワークポリシーにより boatrace.jp / mbrace.or.jp へ
+アクセスできないため、スクレイパー・LZH取り込みの実地検証は別環境で行う必要がある。
+`Dockerfile` / `docker-compose.yml` を用意しており、`lhasa` もイメージにインストール
+済みなので、Dockerが動く環境であれば以下だけで一式起動できる。
+
+```bash
+docker compose up --build
+```
+
+`data` はDocker volumeに永続化される。過去データの手動取り込みAPIを使う場合は
+`docker-compose.yml` の `ADMIN_TOKEN` 環境変数のコメントを外して値を設定すること。
+
+**注意**: 本開発環境にはDockerデーモンが無く、`docker build` 自体の実行検証はできていない
+(Dockerfileの内容は妥当だが未実地検証)。`apt-get install lhasa` がこのサンドボックスの
+Debianベース環境で問題なく動くことは別途確認済み(Dockerfileも同じ `node:22-bookworm-slim`
+= Debianベースを使用)。
+
 ## データ取得についての重要な注意
 
 公式サイト(boatrace.jp)の利用規約は、スクレイピングを明示的に許可してはいない。

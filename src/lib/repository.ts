@@ -2,7 +2,15 @@ import { getDb } from "@/lib/db";
 import { buildDevelopmentPrediction } from "@/lib/prediction";
 import { deadlineDateJst } from "@/lib/date";
 import { VENUES } from "@/lib/venues";
-import type { Entry, ExhibitionEntry, PeriodBadge, RaceDetail, RaceSummary, VenueDayStatus } from "@/lib/types";
+import type {
+  Entry,
+  ExhibitionEntry,
+  PeriodBadge,
+  RaceDetail,
+  RaceSummary,
+  RacerProfile,
+  VenueDayStatus,
+} from "@/lib/types";
 
 type RaceRow = {
   id: string;
@@ -152,6 +160,56 @@ export function listVenueDaysByDate(date: string): VenueDayStatus[] {
       gradeBadge: row.grade_badge,
     };
   });
+}
+
+type RacerRow = {
+  racer_number: string;
+  name_kanji: string;
+  name_kana: string | null;
+  branch: string | null;
+  racer_class: string | null;
+  win_rate: number | null;
+  place_rate: number | null;
+  race_count: number | null;
+  avg_start_timing: number | null;
+  term_year: string | null;
+  term_no: string | null;
+} & Record<`course${1 | 2 | 3 | 4 | 5 | 6}_${"entry_count" | "place_rate" | "avg_st" | "avg_start_rank"}`, number | null>;
+
+/**
+ * レーサー期別成績マスタ(racersテーブル、過去データ取り込みバッチで投入)からの読み取り。
+ * 現状どの画面からも呼ばれていない(将来、出走表の補強表示や第2段階のAI予想で利用する
+ * ための土台)。フィールドの意味(特に複勝率が何連対率を指すか)は実データでの検証が
+ * 済むまで、既存のentries表示側には反映しないこと。
+ */
+export function getRacerProfile(racerNumber: string): RacerProfile | null {
+  const db = getDb();
+  const row = db.prepare("SELECT * FROM racers WHERE racer_number = ?").get(racerNumber) as
+    | RacerRow
+    | undefined;
+  if (!row) return null;
+
+  const courseProfiles = ([1, 2, 3, 4, 5, 6] as const).map((course) => ({
+    entryCount: row[`course${course}_entry_count`],
+    placeRate: row[`course${course}_place_rate`],
+    avgStartTiming: row[`course${course}_avg_st`],
+    avgStartRank: row[`course${course}_avg_start_rank`],
+  }));
+
+  return {
+    racerNumber: row.racer_number,
+    nameKanji: row.name_kanji,
+    nameKana: row.name_kana ?? "",
+    branch: row.branch ?? "",
+    racerClass: row.racer_class ?? "",
+    winRate: row.win_rate,
+    placeRate: row.place_rate,
+    raceCount: row.race_count,
+    avgStartTiming: row.avg_start_timing,
+    courses: courseProfiles,
+    termYear: row.term_year,
+    termNo: row.term_no,
+  };
 }
 
 export function listActiveDates(): string[] {

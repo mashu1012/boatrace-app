@@ -1,0 +1,13 @@
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      - boatrace_data:/app/data
+    environment:
+      - NODE_ENV=production
+      # - ADMIN_TOKEN=changeme  # 過去データ手動取り込みAPIを使う場合は設定する
+
+volumes:
+  boatrace_data:

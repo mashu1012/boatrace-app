@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getCurrentOrNextRaceId } from "@/lib/repository";
 import type { VenueDayStatus } from "@/lib/types";
 
 const PERIOD_STYLE: Record<string, { bg: string; text: string; label: string }> = {
@@ -17,6 +18,12 @@ const GRADE_STYLE: Record<string, { bg: string; text: string }> = {
 };
 
 export default function VenueCard({ venue, date }: { venue: VenueDayStatus; date: string }) {
+  // 開催中の場をタップしたら、場一覧を経由せず「現在開催中/次に締切を迎えるレース」の
+  // 詳細画面に直接遷移する(まだレースが始まっていなければ1R)。レースデータが
+  // 未取得の場合のみ、場別レース一覧ページにフォールバックする。
+  const currentRaceId = venue.active ? getCurrentOrNextRaceId(date, venue.jcd) : null;
+  const href = currentRaceId ? `/race/${currentRaceId}` : `/venue/${venue.jcd}?date=${date}`;
+
   const period = venue.periodBadge ? PERIOD_STYLE[venue.periodBadge] : null;
   const grade = venue.gradeBadge ? GRADE_STYLE[venue.gradeBadge] : null;
 
@@ -57,7 +64,7 @@ export default function VenueCard({ venue, date }: { venue: VenueDayStatus; date
   if (!venue.active) return content;
 
   return (
-    <Link href={`/venue/${venue.jcd}?date=${date}`} className="block">
+    <Link href={href} className="block">
       {content}
     </Link>
   );

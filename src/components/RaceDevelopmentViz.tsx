@@ -196,18 +196,22 @@ export default function RaceDevelopmentViz({
   return (
     <div className="space-y-6">
       <section>
-        <h3 className="mb-2 text-sm font-semibold text-gray-700">① スタートのライン予想</h3>
-        <StartLinePanel exhibitions={exhibitions} />
-      </section>
-      <section>
         <h3 className="mb-2 text-sm font-semibold text-gray-700">② 進入コース予想</h3>
         <CourseEntryPanel exhibitions={exhibitions} />
       </section>
-      <section>
-        <h3 className="mb-2 text-sm font-semibold text-gray-700">
-          ③ 1マーク通過後の展開予想(展示タイム反映)
-        </h3>
-        <MarkDevelopmentPanel prediction={prediction} exhibitions={exhibitions} />
+      {/* ①スタートのライン予想 と ③1マークのライン予想 は一連の「ライン予想」として
+          横並び(PC)/縦並び(スマホ)で隣接表示する */}
+      <section className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+        <div>
+          <h3 className="mb-2 text-sm font-semibold text-gray-700">① スタートのライン予想</h3>
+          <StartLinePanel exhibitions={exhibitions} />
+        </div>
+        <div>
+          <h3 className="mb-2 text-sm font-semibold text-gray-700">
+            ③ 1マークのライン予想(展示タイム反映)
+          </h3>
+          <MarkDevelopmentPanel prediction={prediction} exhibitions={exhibitions} />
+        </div>
       </section>
       <p className="text-xs text-gray-400">{prediction.note}</p>
     </div>

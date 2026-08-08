@@ -1,5 +1,6 @@
 import { getDb } from "@/lib/db";
 import { buildDevelopmentPrediction } from "@/lib/prediction";
+import { deadlineDateJst } from "@/lib/date";
 import { VENUES } from "@/lib/venues";
 import type { Entry, ExhibitionEntry, PeriodBadge, RaceDetail, RaceSummary, VenueDayStatus } from "@/lib/types";
 
@@ -96,6 +97,26 @@ export function getRaceDetail(raceId: string): RaceDetail | null {
     exhibitions,
     prediction: exhibitions.length > 0 ? buildDevelopmentPrediction(exhibitions) : null,
   };
+}
+
+/**
+ * 指定の場・日について「現在開催中/次に締切を迎えるレース」のIDを返す。
+ * 全レースの締切が過ぎている(その日のレースが終了している)場合は最終レースを返す。
+ * レースデータが存在しない場合は null。
+ */
+export function getCurrentOrNextRaceId(date: string, jcd: string): string | null {
+  const races = listRacesByDate(date)
+    .filter((r) => r.jcd === jcd)
+    .sort((a, b) => a.rno - b.rno);
+  if (races.length === 0) return null;
+
+  const now = Date.now();
+  const next = races.find((r) => {
+    if (!r.deadline) return false;
+    const dt = deadlineDateJst(date, r.deadline);
+    return dt !== null && dt.getTime() >= now;
+  });
+  return (next ?? races[races.length - 1]).id;
 }
 
 export function listVenueDaysByDate(date: string): VenueDayStatus[] {

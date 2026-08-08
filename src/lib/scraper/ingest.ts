@@ -10,6 +10,12 @@ function raceId(date: string, jcd: string, rno: number): string {
 /**
  * トップページ(全24場の開催状況)を1回だけ取得し、venue_daysに保存する。
  * 戻り値は当日開催中の場コード一覧。
+ *
+ * parseVenueDays が前提とするマークアップ(schedule1_lists)は https://www.boatrace.jp/
+ * のトップページで検証済み。同ウィジェットは日付指定ができないため、日付を指定して
+ * 同じ一覧を取得できる /owpc/pc/race/index?hd=YYYYMMDD (トップページの「レース一覧」
+ * リンク先、同一のdynamic_partsウィジェットを描画していると想定)を利用する。
+ * 1日1回のバッチ取得のみで、ユーザーアクセスのたびには取得しない。
  */
 export async function ingestVenueDays(date: string): Promise<string[]> {
   const db = getDb();

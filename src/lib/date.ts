@@ -11,6 +11,16 @@ export function formatDateJp(date: string): string {
   return `${date.slice(0, 4)}年${Number(date.slice(4, 6))}月${Number(date.slice(6, 8))}日`;
 }
 
+export function deadlineDateJst(date: string, deadline: string): Date | null {
+  const match = deadline.match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return null;
+  const [, hh, mm] = match;
+  const y = Number(date.slice(0, 4));
+  const mo = Number(date.slice(4, 6));
+  const d = Number(date.slice(6, 8));
+  return new Date(Date.UTC(y, mo - 1, d, Number(hh) - 9, Number(mm)));
+}
+
 export function addDays(date: string, delta: number): string {
   const y = Number(date.slice(0, 4));
   const m = Number(date.slice(4, 6));

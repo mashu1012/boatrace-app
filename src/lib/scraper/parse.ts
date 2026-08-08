@@ -3,9 +3,10 @@ import type { Entry, ExhibitionEntry, PeriodBadge, VenueDayStatus } from "@/lib/
 import { VENUES } from "@/lib/venues";
 
 /**
- * 注意: このパーサーは公式サイトの一般的なテーブル構造(セル順序ベース)を前提に
- * 実装しているが、本開発環境はネットワーク制限により対象サイトへ直接アクセスできず、
- * 実HTMLに対する検証を行えていない。本番投入前に必ず実際のページで動作確認し、
+ * 注意: 本開発環境はネットワーク制限により対象サイトへ直接アクセスできない。
+ * parseVenueDays はユーザー提供の実ページソースで検証済みだが、parseRaceIndex /
+ * parseRaceCard / parseBeforeInfo は公式サイトの一般的なテーブル構造(セル順序ベース)を
+ * 前提にした未検証の実装である。本番投入前に必ず実際のページで動作確認し、
  * 必要に応じてセレクタを調整すること(参照: README「データ取得について」)。
  */
 
@@ -32,76 +33,73 @@ export type RaceListItem = {
   deadline: string | null;
 };
 
-const PERIOD_BADGES: PeriodBadge[] = ["モーニング", "デイ", "サマータイム", "ナイター", "ミッドナイト"];
-
-function ownText($el: cheerio.Cheerio<AnyNode>): string {
-  return $el
-    .contents()
-    .filter((_, n) => (n as { type?: string }).type === "text")
-    .text()
-    .trim();
-}
-
 /**
  * トップページ(当日の開催場一覧)から全24場の開催状況を抽出する。
- * 各場カードの正確なマークアップは未検証のため、「場名テキストを起点に祖先を遡り、
- * 開催日数パターンを含む要素をカードとみなす」というテキストベースの手法を採る。
+ *
+ * 実際のマークアップ(2026-08-08取得のページソースで確認済み):
+ *   <ul class="schedule1_lists h-clear">
+ *     <li class="schedule-button">
+ *       <a href="..." class="schedule1_area is-G3b is-summer">平和島</a>
+ *       <a href="/owpc/pc/race/raceindex?jcd=04&hd=20260808" class="schedule1_date ">最終日</a>
+ *     </li>
+ *     <li class="schedule-button">
+ *       <a href="..." class="schedule1_area  ">桐生</a>
+ *       <span class="schedule1_date">-</span>
+ *     </li>
+ *     ...
+ *   </ul>
+ * - 24場が固定順(01〜24)で並ぶため、リスト内の並び順(index+1)をjcdとして採用する
+ *   (非開催の場は schedule1_date が <span>「-」</span> のみで jcd を含むリンクがないため)
+ * - 開催中かどうかは schedule1_date が <a>(レースindexへのリンク)かどうかで判定する
+ * - 時間帯・グレードは schedule1_area の class 修飾子(is-morning/is-summer/is-nighter/
+ *   is-midnight, is-SGx/is-G1x/is-G2x/is-G3x)から判定する
  */
 export function parseVenueDays(html: string): VenueDayStatus[] {
   const $ = cheerio.load(html);
   const results: VenueDayStatus[] = [];
 
-  for (const venue of VENUES) {
-    let resolved = false;
+  const items = $("ul.schedule1_lists li.schedule-button").toArray();
 
-    $("*").each((_, el) => {
-      if (resolved) return;
-      const $el = $(el as AnyNode);
-      if (ownText($el) !== venue.name) return;
+  items.forEach((li, idx) => {
+    const $li = $(li as AnyNode);
+    const jcd = String(idx + 1).padStart(2, "0");
 
-      let container = $el;
-      for (let i = 0; i < 5; i++) {
-        const text = textOf(container);
-        if (text.length > 0 && text.length < 120 && /(初日|最終日|\d+日目)/.test(text)) break;
-        const parent = container.parent();
-        if (parent.length === 0) break;
-        container = parent;
-      }
+    const areaEl = $li.find("a.schedule1_area").first();
+    const venueNameText = areaEl.text().trim() || VENUES[idx]?.name || jcd;
+    const areaClass = areaEl.attr("class") ?? "";
 
-      const containerText = textOf(container);
-      const dayMatch = containerText.match(/(初日|最終日|\d+日目)/);
-      const gradeMatch = containerText.match(/\b(SG|G1|G2|G3)\b/);
+    const dateLink = $li.find("a.schedule1_date").first();
+    const active = dateLink.length > 0;
+    const eventDayLabel = active ? textOf(dateLink) : null;
 
-      let periodBadge: PeriodBadge | null = null;
-      container.find("img[alt], [title]").each((__, badgeEl) => {
-        const $badge = $(badgeEl as AnyNode);
-        const label = $badge.attr("alt") ?? $badge.attr("title") ?? "";
-        if ((PERIOD_BADGES as string[]).includes(label)) {
-          periodBadge = label as PeriodBadge;
-        }
-      });
+    const gradeMatch = areaClass.match(/is-(SG|G1|G2|G3)[a-z]?/i);
+    let periodBadge: PeriodBadge | null = null;
+    if (/\bis-morning\b/.test(areaClass)) periodBadge = "モーニング";
+    else if (/\bis-summer\b/.test(areaClass)) periodBadge = "サマータイム";
+    else if (/\bis-nighter\b/.test(areaClass)) periodBadge = "ナイター";
+    else if (/\bis-midnight\b/.test(areaClass)) periodBadge = "ミッドナイト";
+    else if (active) periodBadge = "デイ";
 
-      results.push({
-        jcd: venue.jcd,
-        venueName: venue.name,
-        active: Boolean(dayMatch),
-        eventDayLabel: dayMatch ? dayMatch[1] : null,
-        periodBadge,
-        gradeBadge: gradeMatch ? gradeMatch[1] : null,
-      });
-      resolved = true;
+    results.push({
+      jcd,
+      venueName: venueNameText,
+      active,
+      eventDayLabel,
+      periodBadge,
+      gradeBadge: gradeMatch ? gradeMatch[1].toUpperCase() : null,
     });
+  });
 
-    if (!resolved) {
-      results.push({
-        jcd: venue.jcd,
-        venueName: venue.name,
-        active: false,
-        eventDayLabel: null,
-        periodBadge: null,
-        gradeBadge: null,
-      });
-    }
+  // ページ取得に失敗した場合などのフォールバック(全場非開催として返す)
+  if (results.length === 0) {
+    return VENUES.map((v) => ({
+      jcd: v.jcd,
+      venueName: v.name,
+      active: false,
+      eventDayLabel: null,
+      periodBadge: null,
+      gradeBadge: null,
+    }));
   }
 
   return results;

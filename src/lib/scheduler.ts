@@ -1,7 +1,8 @@
 import cron from "node-cron";
 import { getDb } from "@/lib/db";
-import { todayJst } from "@/lib/date";
+import { todayJst, addDays } from "@/lib/date";
 import { ingestDailySchedule, ingestExhibitionOnce } from "@/lib/scraper/ingest";
+import { ingestRacerPeriodStats, ingestRaceResults } from "@/lib/historical/ingest";
 
 // 展示データの取得ウィンドウ: 締切のこのくらい前〜このくらい前の間に1回だけ取得する
 const WINDOW_START_MIN = 15;
@@ -25,6 +26,8 @@ let started = false;
  * 公式サイトへの負荷を最小限にするためのスケジューラ。
  *   - 毎日1回(08:00 JST): 当日開催場の番組表・出走表をまとめて取得
  *   - 毎分: 締切15分前後の対象レースの展示データを「1回だけ」取得
+ *   - 毎日1回(04:00 JST): 前日分の競走成績アーカイブ(Kファイル)を取り込み
+ *   - 週1回(月曜 05:00 JST): レーサー期別成績を取り込み(取り込み済みならスキップ)
  * ユーザーのページ閲覧はこのスケジューラの結果(DBキャッシュ)を読むだけで、
  * リクエストのたびに公式サイトへアクセスすることはない。
  */
@@ -45,7 +48,32 @@ export function startScheduler(): void {
     });
   });
 
+  startHistoricalJobs();
+
   console.log("[scheduler] started");
+}
+
+/**
+ * 過去データ(レーサー期別成績・競走成績アーカイブ)の低頻度取り込みジョブ。
+ * ライブの当日データ取得(上記)とは完全に独立しており、失敗してもライブ側には影響しない。
+ */
+function startHistoricalJobs(): void {
+  // 毎日 04:00 JST (=前日19:00 UTC) に前日分の競走成績を取り込み
+  cron.schedule("0 19 * * *", () => {
+    const yesterday = addDays(todayJst(), -1);
+    void ingestRaceResults(yesterday).catch((err) => {
+      console.error("[scheduler] race results ingest failed", err);
+    });
+  });
+
+  // 毎週月曜 05:00 JST (=日曜20:00 UTC) にレーサー期別成績を取り込み
+  // (期別成績は年数回しか更新されないが、更新済みファイルはhistorical_ingest_logで
+  //  スキップされるため、この頻度で確認しても実際のダウンロードはほぼ発生しない)
+  cron.schedule("0 20 * * 0", () => {
+    void ingestRacerPeriodStats().catch((err) => {
+      console.error("[scheduler] racer period stats ingest failed", err);
+    });
+  });
 }
 
 async function runExhibitionWindowCheck(): Promise<void> {

@@ -9,6 +9,7 @@
 - better-sqlite3 ─ 取得済みデータのキャッシュ用DB(常駐Nodeプロセス前提)
 - cheerio ─ 公式サイトHTMLのパース
 - node-cron ─ 低頻度・定時のデータ取得スケジューラ
+- lhasa(外部コマンド、要インストール) + iconv-lite ─ 過去データ(LZH配布・Shift-JIS)の解凍/デコード
 
 ## セットアップ
 
@@ -57,6 +58,35 @@ npm run dev
 (出走表・直前情報)は公開情報から得た一般的なテーブル構造を前提にした**未検証の実装**であり、
 本番投入前に実際のページソースで検証・調整すること。
 
+## 過去データ(データベース基盤)について
+
+当日のライブスクレイピングとは別に、公式が明示的に提供している「ダウンロード」機能から
+過去データを取り込むバッチ処理を用意している(要件定義書7「過去データ: まとめて取得し、
+データベースに蓄積」に対応)。
+
+- **レーサー期別成績**: `https://www.boatrace.jp/owpc/pc/extra/data/download.html`
+  からLZHをダウンロードし、解凍後の固定長テキスト(143項目)をパースして `racers`
+  テーブルへ格納。年数回更新される想定で、週1回チェックする(取り込み済みならスキップ)。
+- **競走成績アーカイブ**: `http://www1.mbrace.or.jp/od2/K/YYYYMM/kYYMMDD.lzh` から
+  日別のLZHをダウンロードし、`race_results` テーブルへ格納。毎日1回、前日分を取り込む。
+  第2段階のAI予想・統計機能のための土台であり、現状の画面表示にはまだ使っていない。
+
+**この2つのパーサー(`src/lib/historical/parsePlayers.ts` / `parseResults.ts`)は、
+公式仕様書ではなく、同フォーマットを実際に処理している公開実装(GitHub: cstenmt/boatrace)
+のロジックを移植したもの。** レーサー期別成績側はフィールド名とバイト位置定義の項目数が
+一致することを検証済みだが、いずれも実際の配布ファイルに対するテストはネットワーク制限
+により未実施。本番投入前に実データで検証すること。
+
+**LZH解凍について**: Node.jsに実用的なLZH展開ライブラリが存在しないため、外部コマンド
+`lhasa` (`apt-get install lhasa`)をchild_process経由で呼び出す方式を採用している
+(`src/lib/lzh.ts`)。デプロイ環境に `lhasa` のインストールが必要。ダミーアーカイブでの
+解凍・Shift-JISデコードのラウンドトリップ動作は確認済み。
+
+低頻度バッチは `src/lib/scheduler.ts` の `startHistoricalJobs()` で、ライブの当日データ
+取得ジョブとは独立したcronとして登録している(前日結果を毎日04:00 JST、期別成績を毎週
+月曜05:00 JSTにチェック)。動作確認用に `POST /api/admin/ingest-historical?type=racers|results`
+(要 `ADMIN_TOKEN` 環境変数)からも手動実行できる。
+
 ## ディレクトリ構成(抜粋)
 
 ```
@@ -72,8 +102,10 @@ src/
     EntryTable.tsx           出走表テーブル
     RaceDevelopmentViz.tsx   展開予想(SVG)ビジュアライゼーション
   lib/
-    scraper/                 公式サイト取得クライアント・パーサー・DB書き込み
-    scheduler.ts             node-cronによる定時取得ジョブ
+    scraper/                 公式サイト取得クライアント・パーサー・DB書き込み(当日ライブデータ)
+    historical/              過去データ(期別成績・競走成績)のダウンロード・パーサー・取り込み
+    lzh.ts                   LZH解凍(lhasa外部コマンド)・Shift-JISデコード
+    scheduler.ts             node-cronによる定時取得ジョブ(ライブ+過去データ)
     repository.ts            DB読み出し(API/画面共通)
     prediction.ts            展示データ(展示タイム・進入コース・スタートタイミング)からの
                               簡易展開予想ロジック(AI予想ではない)
